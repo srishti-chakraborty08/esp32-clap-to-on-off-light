@@ -1,30 +1,11 @@
-
-/*
-  Project: Double Clap to Turn Bulb ON/OFF
-  Board: ESP32 WROOM
-
-  Sound Sensor AO -> GPIO 34
-  Relay IN        -> GPIO 15
-
-  Two claps: Toggle bulb ON/OFF
-*/
-
-#define SOUND_PIN 34
+#define SOUND_PIN 27
 #define RELAY_PIN 15
 
-const int SOUND_THRESHOLD = 2000;
+bool relayState = LOW;
+bool isFirstClapDetected = false;
 
-const unsigned long CLAP_GAP_MIN = 150;
-const unsigned long DOUBLE_CLAP_WINDOW = 800;
-
-const int RELAY_ON = HIGH;
-const int RELAY_OFF = LOW;
-
-bool bulbState = false;
-bool previousAboveThreshold = false;
-
-unsigned long lastClapTime = 0;
 unsigned long firstClapTime = 0;
+unsigned long lastClapTime = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -32,52 +13,45 @@ void setup() {
   pinMode(SOUND_PIN, INPUT);
   pinMode(RELAY_PIN, OUTPUT);
 
-  digitalWrite(RELAY_PIN, RELAY_OFF);
+  digitalWrite(RELAY_PIN, LOW);
 
   Serial.println("Double Clap Bulb Controller Ready");
-  Serial.println("Clap twice to toggle the bulb.");
 }
 
 void loop() {
-  int soundValue = analogRead(SOUND_PIN);
   unsigned long now = millis();
 
-  bool aboveThreshold = soundValue > SOUND_THRESHOLD;
-
-  if (aboveThreshold &&
-      !previousAboveThreshold &&
-      now - lastClapTime >= CLAP_GAP_MIN) {
+  // Detect clap using the digital sound sensor
+  if (digitalRead(SOUND_PIN) == LOW &&
+      now - lastClapTime >= 150) {
 
     lastClapTime = now;
-    Serial.println("Clap detected");
 
-    if (firstClapTime == 0) {
+    if (!isFirstClapDetected) {
       firstClapTime = now;
-    }
-    else if (now - firstClapTime <= DOUBLE_CLAP_WINDOW) {
-      bulbState = !bulbState;
-
-      digitalWrite(
-        RELAY_PIN,
-        bulbState ? RELAY_ON : RELAY_OFF
-      );
-
-      Serial.println(bulbState ? "BULB ON" : "BULB OFF");
-
-      firstClapTime = 0;
+      isFirstClapDetected = true;
     }
     else {
-      firstClapTime = now;
+      // Second clap should be 200-600 ms after first
+      if (now - firstClapTime >= 200 &&
+          now - firstClapTime < 600) {
+
+        relayState = !relayState;  // Toggle relay ON/OFF
+        digitalWrite(RELAY_PIN, relayState);  // Apply new state
+
+        Serial.print("DOUBLE CLAP! Relay now: ");
+        Serial.println(relayState ? "ON" : "OFF");
+      }
+
+      isFirstClapDetected = false;  // Reset
     }
+
+    delay(150);  // Noise debounce
   }
 
-  previousAboveThreshold = aboveThreshold;
-
-  if (firstClapTime != 0 &&
-      now - firstClapTime > DOUBLE_CLAP_WINDOW) {
-    firstClapTime = 0;
+  // Reset if second clap didn't come in time
+  if (isFirstClapDetected &&
+      millis() - firstClapTime > 600) {
+    isFirstClapDetected = false;
   }
-
-  delay(2);
 }
-s
