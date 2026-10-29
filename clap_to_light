@@ -1,0 +1,83 @@
+
+/*
+  Project: Double Clap to Turn Bulb ON/OFF
+  Board: ESP32 WROOM
+
+  Sound Sensor AO -> GPIO 34
+  Relay IN        -> GPIO 15
+
+  Two claps: Toggle bulb ON/OFF
+*/
+
+#define SOUND_PIN 34
+#define RELAY_PIN 15
+
+const int SOUND_THRESHOLD = 2000;
+
+const unsigned long CLAP_GAP_MIN = 150;
+const unsigned long DOUBLE_CLAP_WINDOW = 800;
+
+const int RELAY_ON = HIGH;
+const int RELAY_OFF = LOW;
+
+bool bulbState = false;
+bool previousAboveThreshold = false;
+
+unsigned long lastClapTime = 0;
+unsigned long firstClapTime = 0;
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(SOUND_PIN, INPUT);
+  pinMode(RELAY_PIN, OUTPUT);
+
+  digitalWrite(RELAY_PIN, RELAY_OFF);
+
+  Serial.println("Double Clap Bulb Controller Ready");
+  Serial.println("Clap twice to toggle the bulb.");
+}
+
+void loop() {
+  int soundValue = analogRead(SOUND_PIN);
+  unsigned long now = millis();
+
+  bool aboveThreshold = soundValue > SOUND_THRESHOLD;
+
+  if (aboveThreshold &&
+      !previousAboveThreshold &&
+      now - lastClapTime >= CLAP_GAP_MIN) {
+
+    lastClapTime = now;
+    Serial.println("Clap detected");
+
+    if (firstClapTime == 0) {
+      firstClapTime = now;
+    }
+    else if (now - firstClapTime <= DOUBLE_CLAP_WINDOW) {
+      bulbState = !bulbState;
+
+      digitalWrite(
+        RELAY_PIN,
+        bulbState ? RELAY_ON : RELAY_OFF
+      );
+
+      Serial.println(bulbState ? "BULB ON" : "BULB OFF");
+
+      firstClapTime = 0;
+    }
+    else {
+      firstClapTime = now;
+    }
+  }
+
+  previousAboveThreshold = aboveThreshold;
+
+  if (firstClapTime != 0 &&
+      now - firstClapTime > DOUBLE_CLAP_WINDOW) {
+    firstClapTime = 0;
+  }
+
+  delay(2);
+}
+s
